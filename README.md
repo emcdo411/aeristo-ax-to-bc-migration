@@ -1,6 +1,7 @@
 Aeristo Data Migration Plan: Microsoft Dynamics AX to Dynamics 365 Business Central
+
 📌 Purpose
-This migration plan, designed by an Associate Solutions Architect, outlines a step-by-step, end-to-end ETL and data pipeline solution to transfer ~500,000 records from Microsoft Dynamics AX (pre-2023 legacy data) to Microsoft Dynamics 365 Business Central (post-2023 live data). It ensures accurate data extraction, transformation, and loading (ETL) to support real-time analytics via R Shiny applications in RStudio, as well as Excel and Power BI reporting. The plan uses proven SQL commands, OData V4 API calls, Azure Data Factory (ADF) configurations, and R scripts from successful Dynamics migrations. It addresses real-time data updates from Business Central, API reliability, and RStudio integration for charts, visualizations, reports, and applications, aligning with the Aeristo Data Integration Discovery Document.
+This migration plan, crafted by an Associate Solutions Architect, details a step-by-step, end-to-end ETL and data pipeline solution to transfer ~500,000 records from Microsoft Dynamics AX (pre-2023 legacy data) to Microsoft Dynamics 365 Business Central (post-2023 live data). It ensures accurate data extraction, transformation, and loading (ETL) to enable real-time analytics via R Shiny applications in RStudio, alongside Excel and Power BI reporting. The plan leverages proven SQL commands, OData V4 API calls, Azure Data Factory (ADF) configurations, and R scripts from successful Dynamics migrations. It addresses real-time data updates from Business Central, API reliability, and RStudio integration for charts, visualizations, reports, and applications, aligning with the Aeristo Data Integration Discovery Document.
 📚 Table of Contents
 
 Overview and Assumptions
@@ -19,15 +20,17 @@ Step 9: Monitoring and Maintenance
 
 Error Handling and Troubleshooting
 Tech Stacks
+Contributing
+License
 Conclusion
 
 🧭 Overview and Assumptions
 Objective: Migrate ~500,000 records from Dynamics AX (Customer, Sales, Inventory, Vendor, Purchasing, General Ledger, Manufacturing) to Business Central, enabling real-time analytics in RStudio via R Shiny.
 Assumptions:
 
-Business Central is cloud-based (Azure SQL Database), with REST/OData V4 APIs for data access (on-premises SQL Server as contingency).
+Business Central is cloud-based (Azure SQL Database), with REST/OData V4 APIs (on-premises SQL Server as contingency).
 Dynamics AX uses SQL Server (on-premises/hosted).
-Azure SQL Database is used as a staging layer.
+Azure SQL Database serves as a staging layer.
 Aeristo IT provides schema documentation, credentials, and API keys.
 RStudio is hosted on Azure or internal servers for R Shiny deployment.
 Migration timeline: 4-6 weeks (Phase 1 of Aeristo case study).
@@ -42,12 +45,12 @@ Real-time API connectivity for RStudio reporting.
 The migration follows a phased ETL pipeline:
 
 Preparation: Set up Azure resources, validate access, and map schemas.
-Extraction: Pull data from AX using SQL or DMF.
+Extraction: Extract data from AX using SQL or DMF.
 Staging: Store raw data in Azure SQL.
 Transformation: Align AX data to BC schema using ADF and R.
-Loading: Push transformed data to BC via OData APIs.
+Loading: Load transformed data to BC via OData APIs.
 Real-Time Updates: Configure incremental API syncs.
-RStudio Integration: Build R Shiny apps for real-time reporting.
+RStudio Integration: Develop R Shiny apps for real-time reporting.
 Validation: Test data integrity and performance.
 Monitoring: Ensure pipeline reliability.
 
@@ -56,28 +59,11 @@ Step 1: Preparation and Setup
 Objective: Configure infrastructure and validate access.
 Tasks:
 
-Engage Stakeholders:
-Meet Aeristo IT to confirm BC deployment (cloud/on-premises), AX SQL credentials, and OData API keys.
-
-
-Provision Azure Resources:
-Create Azure SQL Database (100 DTUs, ~500K records).
-Set up ADF instance in Azure portal.
-
-
-Validate Access:
-Test AX SQL Server connection.
-Test BC OData API with OAuth 2.0.
-
-
-Map Schemas:
-Use AX AOT and BC metadata (via API: https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/$metadata) to finalize field mappings (e.g., CustTable.AccountNum → Customer.No).
-
-
-Create Lookup Tables:
-In Azure SQL, create tables for code mappings.
-
-CREATE TABLE CodeMapping (
+Engage Stakeholders: Meet Aeristo IT to confirm BC deployment, AX SQL credentials, and OData API keys.
+Provision Azure Resources: Create Azure SQL Database (100 DTUs, ~500K records) and ADF instance.
+Validate Access: Test AX SQL Server and BC OData API with OAuth 2.0.
+Map Schemas: Use AX AOT and BC metadata (https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/$metadata) to map fields (e.g., CustTable.AccountNum → Customer.No).
+Create Lookup Tables:CREATE TABLE CodeMapping (
     AX_Code NVARCHAR(50),
     BC_Code NVARCHAR(50),
     Module NVARCHAR(50)
@@ -99,7 +85,7 @@ Test AX SQL connection:SELECT @@VERSION; -- Verify SQL Server version
 SELECT TOP 10 AccountNum FROM CustTable; -- Sample data
 
 
-Test BC OData API (via Postman):GET https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/customers
+Test BC OData API:GET https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/customers
 Authorization: Bearer {access_token}
 
 
@@ -109,10 +95,7 @@ Step 2: Data Extraction from Dynamics AX
 Objective: Extract ~500,000 records from AX.
 Tasks:
 
-SQL Extraction (preferred):
-Use SSMS to query key tables.
-
-SELECT AccountNum, Name, Address, Phone, CustGroup, Email, CreditLimit, PaymentTerms
+SQL Extraction (preferred):SELECT AccountNum, Name, Address, Phone, CustGroup, Email, CreditLimit, PaymentTerms
 FROM CustTable;
 SELECT SalesId, CustAccount, SalesQty, InvoiceDate, AmountCur, SalesStatus, DeliveryDate
 FROM SalesTable;
@@ -121,15 +104,8 @@ FROM InventTable
 WHERE TransDate IS NOT NULL;
 
 
-DMF Export (if SQL restricted):
-In AX, use Data Management Framework to export entities to CSV.
-Steps: Navigate to Data Management > Export > Select entity (e.g., “Customers”) > Export to CSV.
-
-
-Copy to Azure Blob Storage:
-Upload SQL results or CSV files to Azure Blob Storage.
-
-azcopy copy "C:\Exports\Customers.csv" "https://{storage_account}.blob.core.windows.net/ax-data/?{sas_token}"
+DMF Export (if SQL restricted): Use AX Data Management Framework to export entities to CSV (navigate to Data Management > Export > Select entity > Export to CSV).
+Copy to Azure Blob Storage:azcopy copy "C:\Exports\Customers.csv" "https://{storage_account}.blob.core.windows.net/ax-data/?{sas_token}"
 
 
 
@@ -150,10 +126,7 @@ Step 3: Staging in Azure SQL Database
 Objective: Store raw AX data in Azure SQL.
 Tasks:
 
-Create Staging Tables:
-Mirror AX schema in Azure SQL.
-
-CREATE TABLE Staging_CustTable (
+Create Staging Tables:CREATE TABLE Staging_CustTable (
     AccountNum NVARCHAR(50),
     Name NVARCHAR(100),
     Address NVARCHAR(255),
@@ -176,11 +149,7 @@ CREATE TABLE Staging_SalesTable (
 );
 
 
-Load Data via ADF:
-Create ADF pipeline to ingest data from Blob Storage to Azure SQL.
-Pipeline JSON (simplified):
-
-{
+Load Data via ADF:{
     "name": "AX_to_AzureSQL",
     "activities": [
         {
@@ -216,24 +185,14 @@ Objective: Align AX data to BC schema.
 Tasks:
 
 Create Transformation Pipeline in ADF:
-Use ADF Data Flows to map fields, reformat dates, and standardize IDs.
-Example mappings:
-AccountNum → No (prefix with “AX_”).
-InvoiceDate (MM/DD/YYYY) → DocumentDate (YYYY-MM-DD).
-Split Address into Address, City, PostCode.
-
-
-ADF Expression for date:toDate(InvoiceDate, 'MM/dd/yyyy')
+Map fields, reformat dates, standardize IDs (e.g., AccountNum → No with “AX_” prefix).
+ADF Expression:toDate(InvoiceDate, 'MM/dd/yyyy')
 
 
 
 
-R Script for Complex Transformations:
-Run in Azure Synapse or local RStudio for address parsing, deduplication.
-
-library(dplyr)
+R Script for Complex Transformations:library(dplyr)
 library(stringr)
-# Read staged data (via DBI/RODBC)
 data <- read.csv("Staging_CustTable.csv") # Placeholder for SQL connection
 transformed <- data %>%
   mutate(No = paste0("AX_", AccountNum)) %>%
@@ -245,7 +204,7 @@ transformed <- data %>%
 write.csv(transformed, "Transformed_CustTable.csv")
 
 
-Load Transformed Data to New Azure SQL Tables:CREATE TABLE Transformed_CustTable (
+Load Transformed Data:CREATE TABLE Transformed_CustTable (
     No NVARCHAR(50),
     Name NVARCHAR(100),
     Address NVARCHAR(100),
@@ -272,10 +231,7 @@ Step 5: Loading to Business Central
 Objective: Push transformed data to BC via OData APIs.
 Tasks:
 
-Configure BC API Access:
-Obtain OAuth 2.0 token via Azure AD.
-
-POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+Configure BC API Access:POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
 Content-Type: application/x-www-form-urlencoded
 grant_type=client_credentials
 client_id={client_id}
@@ -283,9 +239,8 @@ client_secret={client_secret}
 scope=https://api.businesscentral.dynamics.com/.default
 
 
-Create ADF Pipeline for Loading:
-Use OData sink to push data to BC.
-Example API call for Customers:
+Create ADF Pipeline:
+Example API call:
 
 POST https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/customers
 Authorization: Bearer {access_token}
@@ -305,10 +260,7 @@ Content-Type: application/json
 }
 
 
-Handle Incremental Loads:
-Use ADF to filter changed records.
-
-LastModifiedDateTime >= addDays(utcNow(), -1)
+Handle Incremental Loads:LastModifiedDateTime >= addDays(utcNow(), -1)
 
 
 
@@ -319,7 +271,7 @@ Tests API connectivity and payloads.
 
 Commands:
 
-Verify load in BC:GET https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/customers?$filter=number eq 'AX_CUST001'
+Verify load:GET https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/customers?$filter=number eq 'AX_CUST001'
 Authorization: Bearer {access_token}
 
 
@@ -329,18 +281,11 @@ Step 6: Real-Time Data Updates from Business Central
 Objective: Enable incremental syncs for real-time data.
 Tasks:
 
-Configure ADF for Incremental Sync:
-Create pipeline to pull daily updates from BC APIs.
-Example OData query:
-
-GET https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/salesOrders?$filter=lastModifiedDateTime ge 2025-06-20T00:00:00Z
+Configure ADF for Incremental Sync:GET https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/salesOrders?$filter=lastModifiedDateTime ge 2025-06-20T00:00:00Z
 Authorization: Bearer {access_token}
 
 
-Stage Updates in Azure SQL:
-Update or insert records.
-
-MERGE INTO Transformed_SalesTable AS target
+Stage Updates:MERGE INTO Transformed_SalesTable AS target
 USING Staging_SalesUpdates AS source
 ON target.No = source.No
 WHEN MATCHED THEN
@@ -358,22 +303,14 @@ Stores updated records.
 
 Duration: 3-5 days.
 Step 7: RStudio Integration for Reporting and Applications
-Objective: Build R Shiny apps to pull live BC data for visualizations.
+Objective: Build R Shiny apps for live BC data visualizations.
 Tasks:
 
-Configure RStudio:
-Deploy RStudio on Azure App Service or internal server.
-Install packages:
-
-install.packages(c("shiny", "httr", "jsonlite", "dplyr", "ggplot2"))
+Configure RStudio:install.packages(c("shiny", "httr", "jsonlite", "dplyr", "ggplot2"))
 
 
-Connect to BC APIs:
-Use httr to authenticate and pull data.
-
-library(httr)
+Connect to BC APIs:library(httr)
 library(jsonlite)
-# Get OAuth token
 token_response <- POST(
   "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
   body = list(
@@ -385,7 +322,6 @@ token_response <- POST(
   encode = "form"
 )
 access_token <- content(token_response)$access_token
-# Pull sales data
 sales_response <- GET(
   "https://api.businesscentral.dynamics.com/v2.0/{tenant}/api/v2.0/companies({companyId})/salesOrders",
   add_headers(Authorization = paste("Bearer", access_token))
@@ -393,10 +329,7 @@ sales_response <- GET(
 sales_data <- fromJSON(content(sales_response, "text"))$value
 
 
-Build R Shiny App:
-Create dashboard for sales trends.
-
-library(shiny)
+Build R Shiny App:library(shiny)
 library(ggplot2)
 library(dplyr)
 ui <- fluidPage(
@@ -424,10 +357,7 @@ server <- function(input, output) {
 shinyApp(ui = ui, server = server)
 
 
-Deploy Shiny App:
-Host on Azure App Service or Shiny Server.
-
-rsconnect::deployApp(appDir = "path/to/shiny/app", account = "azure_account")
+Deploy Shiny App:rsconnect::deployApp(appDir = "path/to/shiny/app", account = "azure_account")
 
 
 
@@ -442,30 +372,18 @@ Step 8: Validation and Testing
 Objective: Ensure data integrity and performance.
 Tasks:
 
-Schema Validation:
-Compare AX and BC data:
-
-SELECT COUNT(*) FROM Staging_CustTable; -- ~500K
+Schema Validation:SELECT COUNT(*) FROM Staging_CustTable; -- ~500K
 SELECT COUNT(*) FROM Transformed_CustTable; -- Match staging
 
 
-Data Integrity:
-Sample check via R:
-
-library(DBI)
+Data Integrity:library(DBI)
 con <- dbConnect(odbc::odbc(), Driver = "SQL Server", Server = "{azure_sql_server}", Database = "{database}")
 sample <- dbGetQuery(con, "SELECT TOP 100 No, Name FROM Transformed_CustTable")
 summary(sample)
 
 
-Performance:
-Target <2 hours for daily loads (monitor ADF logs).
-
-
-Reporting:
-Verify R Shiny app pulls live data correctly.
-
-
+Performance: Target <2 hours for daily loads.
+Reporting: Verify R Shiny app data accuracy.
 
 Tools:
 
@@ -479,14 +397,8 @@ Step 9: Monitoring and Maintenance
 Objective: Ensure pipeline reliability.
 Tasks:
 
-Set Up ADF Monitoring:
-Configure alerts for pipeline failures.
-
-
-Log Errors:
-Create Azure SQL error table:
-
-CREATE TABLE ErrorLog (
+Set Up ADF Monitoring: Configure alerts for failures.
+Log Errors:CREATE TABLE ErrorLog (
     ErrorID INT IDENTITY(1,1),
     ErrorMessage NVARCHAR(1000),
     RecordID NVARCHAR(50),
@@ -496,9 +408,9 @@ CREATE TABLE ErrorLog (
 
 Schedule Maintenance:
 Rotate API tokens monthly.
-Optimize SQL indexes:
+Optimize indexes:CREATE INDEX IX_CustTable_No ON Transformed_CustTable(No);
 
-CREATE INDEX IX_CustTable_No ON Transformed_CustTable(No);
+
 
 
 
@@ -551,35 +463,26 @@ ADF: iifNull(Name, 'Unknown')
 
 Process: Log errors in ErrorLog table, review via ADF Monitor, test fixes in pilot loads.
 💻 Tech Stacks
-  
 
 Orchestrates ETL pipelines.
-
-  
-
 Staging and error logging.
-
-  
-
 AX data extraction.
-
-  
-
 Transformations, Shiny apps.
-
-  
-
 Optional for complex transformations.
-
-  
-
 CSV exports if SQL restricted.
-
-  
-
 Validation via reports.
 
+🤝 Contributing
+Contributions are welcome! Please follow these steps:
+
+Fork the repository.
+Create a feature branch (git checkout -b feature/YourFeature).
+Commit changes (git commit -m 'Add YourFeature').
+Push to the branch (git push origin feature/YourFeature).
+Open a Pull Request.
+
+Report issues via the Issues tab.
+📜 License
+This project is licensed under the MIT License.
 📩 Conclusion
-This migration plan provides a robust, end-to-end ETL solution to transfer Dynamics AX data to Business Central, enabling real-time analytics in RStudio via R Shiny. Using proven SQL, OData, ADF, and R commands, with tools presented in colorful banners, it ensures accurate data migration, reliable API connectivity, and scalable reporting for Aeristo’s 2025 goals.
-
-
+This modernized migration plan provides a robust, GitHub-compatible ETL solution to transfer Dynamics AX data to Business Central, enabling real-time analytics in RStudio via R Shiny. With clickable sections, colorful tool and tech stack badges, and proven commands, it ensures accurate data migration, reliable API connectivity, and scalable reporting for Aeristo’s 2025 goals.
